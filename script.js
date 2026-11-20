@@ -1,55 +1,162 @@
-// Update the year in the footer.
 document.querySelector("#year").textContent = new Date().getFullYear();
 
-// Get the gallery and its filter buttons from the page.
 const gallery = document.querySelector("#print-gallery");
+const shop = document.querySelector("#shop-dialog");
+const cartWindow = document.querySelector("#cart-dialog");
+const detailWindow = document.querySelector("#detail-dialog");
+const shopProducts = document.querySelector("#shop-products");
+const cartItems = document.querySelector("#cart-items");
+const cartCount = document.querySelector("[data-cart-count]");
+const cartTotal = document.querySelector("#cart-total");
 const filterButtons = document.querySelectorAll(".filter-button");
-const imageFilePattern = /\.(avif|gif|jpe?g|png|webp)$/i;
+const previousGalleryButton = document.querySelector("#gallery-previous");
+const nextGalleryButton = document.querySelector("#gallery-next");
 
-// Keep the full list so the filters can use it.
+const printPrices = {
+  "Hex-Keychain.jpeg": 2.99, "octo-fidget.jpeg": 3.99,
+  "gear-fidget-spinner.jpeg": 4.99, "rocktopus.jpeg": 5.99
+};
+const printDescriptions = {
+  "Hex-keychain.jpeg": "A lightweight keychain with a hex fidget design.",
+  "octo-fidget.jpeg": "A desk fidget toy with an octopus design.",
+  "gear-fidget-spinner.jpeg": "A planetary gear-based fidget spinner.",
+  "rocktopus.jpeg": "A rocktopus figurine."
+};
+const currencyFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD"
+});
+
 let prints = [];
+let cart = [];
 let selectedFilter = "all";
+let printStatus = "loading";
 
-// Turn "blue-dragon.jpg" into "Blue dragon".
-function getTitle(fileName) {
-  return fileName
-    .replace(imageFilePattern, "")
-    .replace(/[-_]+/g, " ")
-    .trim()
-    .replace(/^./, (letter) => letter.toUpperCase());
+function updateGalleryControls() {
+  const maxScroll = gallery.scrollWidth - gallery.clientWidth;
+  previousGalleryButton.disabled = gallery.scrollLeft <= 1;
+  nextGalleryButton.disabled = maxScroll <= 1 || gallery.scrollLeft >= maxScroll - 1;
 }
 
-// Guess the category by looking for words in the file name.
+function scrollGallery(direction) {
+  gallery.scrollBy({
+    left: direction * gallery.clientWidth * 0.85,
+    behavior: "smooth"
+  });
+}
+
+previousGalleryButton.addEventListener("click", function () {
+  scrollGallery(-1);
+});
+
+nextGalleryButton.addEventListener("click", function () {
+  scrollGallery(1);
+});
+
+gallery.addEventListener("scroll", updateGalleryControls, { passive: true });
+window.addEventListener("resize", updateGalleryControls);
+
+let galleryDragStartX = 0;
+let galleryDragStartScroll = 0;
+let isGalleryDragging = false;
+
+gallery.addEventListener("pointerdown", function (event) {
+  if (event.pointerType !== "mouse" || event.button !== 0 || event.target.closest("button")) {
+    return;
+  }
+
+  isGalleryDragging = true;
+  galleryDragStartX = event.clientX;
+  galleryDragStartScroll = gallery.scrollLeft;
+  gallery.classList.add("is-dragging");
+  gallery.setPointerCapture(event.pointerId);
+});
+
+gallery.addEventListener("pointermove", function (event) {
+  if (!isGalleryDragging) {
+    return;
+  }
+
+  gallery.scrollLeft = galleryDragStartScroll - (event.clientX - galleryDragStartX);
+});
+
+function stopGalleryDrag() {
+  isGalleryDragging = false;
+  gallery.classList.remove("is-dragging");
+}
+
+gallery.addEventListener("pointerup", stopGalleryDrag);
+gallery.addEventListener("pointercancel", stopGalleryDrag);
+gallery.addEventListener("lostpointercapture", stopGalleryDrag);
+
+function getPrintPrice(fileName) {
+  const price = printPrices[fileName];
+  if (price === undefined) {
+    return null;
+  }
+  if (typeof price !== "number" || !Number.isFinite(price) || price < 0) {
+    console.error('Invalid price for "' + fileName + '". Use a non-negative number.');
+    return null;
+  }
+  return price;
+}
+
+function formatPrice(price) {
+  return price === null ? "Price not set" : currencyFormatter.format(price);
+}
+
+// Make a text element and add it to another element.
+function addText(parent, tag, className, text) {
+  const element = document.createElement(tag);
+  element.className = className;
+  element.textContent = text;
+  parent.appendChild(element);
+  return element;
+}
+
+function showMessage(parent, message) {
+  parent.textContent = "";
+  addText(parent, "p", "gallery-message", message);
+}
+
+function getTitle(fileName) {
+  let title = fileName.replace(/\.(avif|gif|jpe?g|png|webp)$/i, "");
+  title = title.replace(/[-_]/g, " ").trim();
+  return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+function hasWord(name, words) {
+  for (let i = 0; i < words.length; i++) {
+    if (name.includes(words[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function getCategory(fileName) {
   const name = fileName.toLowerCase();
 
-  const categories = [
-    { name: "Accessories", words: /(key|ring|brace|clip|holder|case|stand|tag)/ },
-    { name: "Tools", words: /(tool|wrench|adapter|bracket|mount|guide|drive)/ },
-    { name: "Desk items", words: /(tray|organizer|desk|pen|lamp|holder|stand)/ },
-    { name: "Collectibles", words: /(dragon|mini|toy|figure|robot|mask|character|ornament|creature)/ },
-    { name: "Functional", words: /(part|plate|joint|base|prototype|shell|panel)/ }
-  ];
-
-  for (const category of categories) {
-    if (category.words.test(name)) {
-      return category.name;
-    }
+  if (hasWord(name, ["key", "ring", "brace", "clip", "holder", "case", "stand", "tag"])) {
+    return "Accessories";
+  }
+  if (hasWord(name, ["tool", "wrench", "adapter", "bracket", "mount", "guide", "drive"])) {
+    return "Tools";
+  }
+  if (hasWord(name, ["tray", "organizer", "desk", "pen", "lamp", "holder", "stand"])) {
+    return "Desk items";
+  }
+  if (hasWord(name, ["dragon", "mini", "toy", "figure", "robot", "mask", "character", "ornament", "creature", "fidget" ])) {
+    return "Collectibles";
+  }
+  if (hasWord(name, ["part", "plate", "joint", "base", "prototype", "shell", "panel"])) {
+    return "Functional";
   }
 
   return "Student design";
 }
 
-// Show a message in the gallery when there are no prints to display.
-function showMessage(message) {
-  const paragraph = document.createElement("p");
-  paragraph.className = "gallery-message";
-  paragraph.textContent = message;
-  gallery.replaceChildren(paragraph);
-}
-
-// Make one gallery card for a print.
-function makePrintCard(print) {
+function makePrintCard(print, inShop) {
   const card = document.createElement("article");
   card.className = "idea-card";
 
@@ -58,120 +165,259 @@ function makePrintCard(print) {
 
   const image = document.createElement("img");
   image.src = print.url;
-  image.alt = `Photo of ${print.title}`;
+  image.alt = "Photo of " + print.title;
   image.loading = "lazy";
-  art.append(image);
+  art.appendChild(image);
+  card.appendChild(art);
 
-  const tag = document.createElement("span");
-  tag.className = "idea-tag";
-  tag.textContent = print.category;
+  addText(card, "span", "idea-tag", print.category);
 
-  const number = document.createElement("p");
-  number.className = "idea-number";
-  number.textContent = `PUEBLO PRINT / ${String(print.index + 1).padStart(2, "0")}`;
+  let number = print.index + 1;
+  if (number < 10) {
+    number = "0" + number;
+  }
+  addText(card, "p", "idea-number", "PUEBLO PRINT / " + number);
+  addText(card, "h3", "", print.title);
+  addText(card, "p", "print-price", formatPrice(print.price));
 
-  const title = document.createElement("h3");
-  title.textContent = print.title;
+  const button = document.createElement("button");
+  button.type = "button";
 
-  const description = document.createElement("p");
-  description.textContent = "Designed and made by Pueblo High School students.";
+  if (inShop) {
+    button.className = "add-to-cart";
+    button.textContent = "Add to cart";
+    button.addEventListener("click", function () {
+      addToCart(print);
+    });
+  } else {
+    button.className = "view-item-button";
+    button.textContent = "View item";
+    button.setAttribute("aria-label", "View details for " + print.title);
+    button.addEventListener("click", function () {
+      showDetails(print);
+    });
+  }
 
-  card.append(art, tag, number, title, description);
+  card.appendChild(button);
   return card;
 }
 
-// Show the prints that match the selected filter.
-function showPrints() {
-  let visiblePrints = prints;
+function showDetails(print) {
+  document.querySelector("#detail-image").src = print.url;
+  document.querySelector("#detail-image").alt = "Photo of " + print.title;
+  document.querySelector("#detail-category").textContent = print.category;
+  document.querySelector("#detail-title").textContent = print.title;
+  document.querySelector("#detail-price").textContent = formatPrice(print.price);
+  document.querySelector("#detail-description").textContent =
+    print.description || "Description not added yet.";
 
-  if (selectedFilter !== "all") {
-    visiblePrints = prints.filter((print) => print.category === selectedFilter);
-  }
+  document.querySelector("#detail-add-button").onclick = function () {
+    addToCart(print);
+    detailWindow.close();
+  };
 
-  if (visiblePrints.length === 0) {
-    showMessage("No prints match that filter yet. Try another category or add a new design to the gallery.");
+  detailWindow.showModal();
+}
+
+function showShop() {
+  if (prints.length === 0) {
+    if (printStatus === "loading") {
+      showMessage(shopProducts, "Loading student prints…");
+    } else if (printStatus === "error") {
+      showMessage(shopProducts, "The shop preview isn’t available right now. Please try again later.");
+    } else {
+      showMessage(shopProducts, "No prints are available to preview yet.");
+    }
     return;
   }
 
-  gallery.replaceChildren();
-
-  for (const print of visiblePrints) {
-    gallery.append(makePrintCard(print));
+  shopProducts.textContent = "";
+  for (let i = 0; i < prints.length; i++) {
+    shopProducts.appendChild(makePrintCard(prints[i], true));
   }
 }
 
-// Update the selected filter when someone clicks a button.
-function chooseFilter(filterName) {
-  selectedFilter = filterName;
-
-  for (const button of filterButtons) {
-    const isSelected = button.dataset.filter === filterName;
-    button.classList.toggle("is-active", isSelected);
-    button.setAttribute("aria-pressed", String(isSelected));
-  }
-
-  showPrints();
+function addToCart(print) {
+  cart.push(print);
+  showCart();
 }
 
-for (const button of filterButtons) {
-  button.addEventListener("click", () => {
-    chooseFilter(button.dataset.filter);
+function showCart() {
+  cartCount.textContent = cart.length;
+  let itemWord = "items";
+  if (cart.length === 1) {
+    itemWord = "item";
+  }
+  document.querySelector("[data-open-cart]").setAttribute(
+    "aria-label",
+    "Open cart, " + cart.length + " " + itemWord
+  );
+  cartItems.textContent = "";
+  cartTotal.hidden = true;
+
+  if (cart.length === 0) {
+    showMessage(cartItems, "Your cart is empty. Browse the student prints and save a few favorites!");
+    return;
+  }
+
+  for (let i = 0; i < cart.length; i++) {
+    const item = document.createElement("article");
+    item.className = "cart-item";
+    const thumbnail = document.createElement("img");
+    thumbnail.className = "cart-item-thumbnail";
+    thumbnail.src = cart[i].url;
+    thumbnail.alt = "";
+    item.appendChild(thumbnail);
+
+    const info = document.createElement("div");
+    info.className = "cart-item-info";
+    addText(info, "h3", "", cart[i].title);
+    addText(info, "p", "cart-item-price", formatPrice(cart[i].price));
+    item.appendChild(info);
+
+    const removeButton = document.createElement("button");
+    removeButton.className = "remove-from-cart";
+    removeButton.type = "button";
+    removeButton.textContent = "Remove";
+    removeButton.addEventListener("click", function () {
+      cart.splice(i, 1);
+      showCart();
+    });
+
+    item.appendChild(removeButton);
+    cartItems.appendChild(item);
+  }
+
+  const allPricesSet = cart.every(function (item) {
+    return item.price !== null;
+  });
+  if (allPricesSet) {
+    let subtotal = 0;
+    for (let i = 0; i < cart.length; i++) {
+      subtotal += cart[i].price;
+    }
+    cartTotal.textContent = "Subtotal: " + currencyFormatter.format(subtotal);
+  } else {
+    cartTotal.textContent = "Set prices for all items to see the subtotal.";
+  }
+  cartTotal.hidden = false;
+}
+
+const shopButtons = document.querySelectorAll("[data-open-shop]");
+for (let i = 0; i < shopButtons.length; i++) {
+  shopButtons[i].addEventListener("click", function () {
+    showShop();
+    shop.showModal();
   });
 }
 
-// Find image files in the prints folder.
+document.querySelector("[data-open-cart]").addEventListener("click", function () {
+  showCart();
+  cartWindow.showModal();
+});
+
+document.querySelector("[data-browse-shop]").addEventListener("click", function () {
+  cartWindow.close();
+  showShop();
+  shop.showModal();
+});
+
+function showPrints() {
+  gallery.textContent = "";
+  gallery.scrollLeft = 0;
+  let shown = 0;
+
+  for (let i = 0; i < prints.length; i++) {
+    if (selectedFilter === "all" || prints[i].category === selectedFilter) {
+      gallery.appendChild(makePrintCard(prints[i], false));
+      shown++;
+    }
+  }
+
+  if (shown === 0) {
+    showMessage(gallery, "No prints match that filter. Try another one.");
+  }
+  updateGalleryControls();
+}
+
+for (let i = 0; i < filterButtons.length; i++) {
+  filterButtons[i].addEventListener("click", function () {
+    selectedFilter = filterButtons[i].dataset.filter;
+
+    for (let j = 0; j < filterButtons.length; j++) {
+      const selected = filterButtons[j] === filterButtons[i];
+      filterButtons[j].classList.toggle("is-active", selected);
+      filterButtons[j].setAttribute("aria-pressed", selected);
+    }
+
+    showPrints();
+  });
+}
+
 async function loadPrints() {
   const folderUrl = new URL("prints/", window.location.href);
   const response = await fetch(folderUrl);
 
   if (!response.ok) {
-    throw new Error(`Could not read ${folderUrl.pathname} (${response.status})`);
+    throw new Error("Could not read the prints folder.");
   }
 
-  const folderPage = new DOMParser().parseFromString(
-    await response.text(),
-    "text/html"
-  );
-  const links = folderPage.querySelectorAll("a[href]");
+  const page = new DOMParser().parseFromString(await response.text(), "text/html");
+  const links = page.querySelectorAll("a[href]");
   const imageUrls = [];
 
-  for (const link of links) {
-    const url = new URL(link.getAttribute("href"), folderUrl);
+  for (let i = 0; i < links.length; i++) {
+    const url = new URL(links[i].getAttribute("href"), folderUrl);
     const fileName = url.pathname.slice(folderUrl.pathname.length);
-    const isInPrintsFolder =
+    const isInFolder =
       url.origin === folderUrl.origin &&
       url.pathname.startsWith(folderUrl.pathname) &&
       fileName.length > 0 &&
       !fileName.includes("/");
+    const isImage = /\.(avif|gif|jpe?g|png|webp)$/i.test(fileName);
 
-    if (isInPrintsFolder && imageFilePattern.test(fileName)) {
+    if (isInFolder && isImage) {
       imageUrls.push(url);
     }
   }
 
-  imageUrls.sort((first, second) => first.pathname.localeCompare(second.pathname));
-
-  if (imageUrls.length === 0) {
-    showMessage("No prints yet. Add JPG, PNG, or WebP photos to the prints folder, then refresh Live Server.");
-    return;
-  }
-
-  prints = imageUrls.map((url, index) => {
-    const fileName = decodeURIComponent(url.pathname.slice(folderUrl.pathname.length));
-
-    return {
-      url: url.href,
-      title: getTitle(fileName) || "Student print",
-      category: getCategory(fileName),
-      index
-    };
+  imageUrls.sort(function (first, second) {
+    return first.pathname.localeCompare(second.pathname);
   });
 
+  for (let i = 0; i < imageUrls.length; i++) {
+    const fileName = decodeURIComponent(
+      imageUrls[i].pathname.slice(folderUrl.pathname.length)
+    );
+
+    let title = getTitle(fileName);
+    if (title === "") {
+      title = "Student print";
+    }
+
+    prints.push({
+      url: imageUrls[i].href,
+      title: title,
+      category: getCategory(fileName),
+      price: getPrintPrice(fileName),
+      description: printDescriptions[fileName],
+      index: i
+    });
+  }
+
+  if (prints.length === 0) {
+    printStatus = "empty";
+  } else {
+    printStatus = "loaded";
+  }
+  showShop();
   showPrints();
 }
 
-// Show an error message if the prints folder could not be loaded.
-loadPrints().catch((error) => {
-  console.error("Unable to load student prints.", error);
-  showMessage("Couldn’t load the prints folder. Start Live Server from the project folder and refresh.");
+loadPrints().catch(function (error) {
+  console.error("Could not load student prints.", error);
+  printStatus = "error";
+  showMessage(gallery, "Couldn’t load the prints. Start Live Server and try again.");
+  updateGalleryControls();
+  showShop();
 });
