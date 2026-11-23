@@ -11,6 +11,7 @@ const cartTotal = document.querySelector("#cart-total");
 const filterButtons = document.querySelectorAll(".filter-button");
 const previousGalleryButton = document.querySelector("#gallery-previous");
 const nextGalleryButton = document.querySelector("#gallery-next");
+const dialogs = [shop, cartWindow, detailWindow];
 
 const printPrices = {
   "Hex-Keychain.jpeg": 2.99, "octo-fidget.jpeg": 3.99,
@@ -207,8 +208,8 @@ function makePrintCard(print, inShop) {
     addButton.className = "add-to-cart";
     addButton.type = "button";
     addButton.textContent = "Add to cart";
-    addButton.addEventListener("click", function () {
-      addToCart(print, image);
+    addButton.addEventListener("click", function (event) {
+      addToCart(print, event);
     });
 
     const actions = document.createElement("div");
@@ -235,7 +236,7 @@ function showDetails(print) {
     detailWindow.close();
   };
 
-  detailWindow.showModal();
+  openDialog(detailWindow);
 }
 
 function showShop() {
@@ -250,51 +251,70 @@ function showShop() {
   }
 }
 
-function addToCart(print, sourceImage) {
-  if (sourceImage && (!window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
-    animateCartAdd(sourceImage);
+function addToCart(print, clickEvent) {
+  if (clickEvent && (!window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    animateCartAdd(clickEvent);
   }
   cart.push(print);
   showCart();
 }
 
-function animateCartAdd(sourceImage) {
+function animateCartAdd(clickEvent) {
   const cartButton = document.querySelector("[data-open-cart]");
-  const sourceRect = sourceImage.getBoundingClientRect();
+  const sourceRect = clickEvent.currentTarget.getBoundingClientRect();
   const targetRect = cartButton.getBoundingClientRect();
 
   if (sourceRect.width === 0 || targetRect.width === 0) {
     return;
   }
 
-  const flyer = sourceImage.cloneNode();
-  flyer.className = "cart-flight-image";
-  flyer.alt = "";
-  flyer.setAttribute("aria-hidden", "true");
-  flyer.style.left = sourceRect.left + "px";
-  flyer.style.top = sourceRect.top + "px";
-  flyer.style.width = sourceRect.width + "px";
-  flyer.style.height = sourceRect.height + "px";
-  if (typeof flyer.animate !== "function") {
+  const startX = clickEvent.detail > 0 ? clickEvent.clientX : sourceRect.left + sourceRect.width / 2;
+  const startY = clickEvent.detail > 0 ? clickEvent.clientY : sourceRect.top + sourceRect.height / 2;
+  const ball = document.createElement("span");
+  ball.className = "cart-flight-ball";
+  ball.setAttribute("aria-hidden", "true");
+  ball.style.left = startX - 14 + "px";
+  ball.style.top = startY - 14 + "px";
+  if (typeof ball.animate !== "function") {
     return;
   }
-  document.body.appendChild(flyer);
+  document.body.appendChild(ball);
 
-  const offsetX = targetRect.left + targetRect.width / 2 - (sourceRect.left + sourceRect.width / 2);
-  const offsetY = targetRect.top + targetRect.height / 2 - (sourceRect.top + sourceRect.height / 2);
-  const animation = flyer.animate([
+  const offsetX = targetRect.left + targetRect.width / 2 - startX;
+  const offsetY = targetRect.top + targetRect.height / 2 - startY;
+  const animation = ball.animate([
     { transform: "translate(0, 0) scale(1)", opacity: 1 },
-    { transform: "translate(" + offsetX + "px, " + offsetY + "px) scale(0.15)", opacity: 0 }
+    {
+      transform: "translate(" + offsetX * 0.55 + "px, " + (offsetY * 0.55 - 48) + "px) scale(0.8)",
+      opacity: 1,
+      offset: 0.55
+    },
+    { transform: "translate(" + offsetX + "px, " + offsetY + "px) scale(0.12)", opacity: 0 }
   ], {
-    duration: 650,
-    easing: "cubic-bezier(0.2, 0.8, 0.2, 1)"
+    duration: 750,
+    easing: "cubic-bezier(0.22, 1, 0.36, 1)"
   });
 
   animation.finished.then(function () {
-    flyer.remove();
+    ball.remove();
   }, function () {
-    flyer.remove();
+    ball.remove();
   });
+}
+
+function updateDialogScrollLock() {
+  document.documentElement.classList.toggle("dialog-open", dialogs.some(function (dialog) {
+    return dialog.open;
+  }));
+}
+
+for (let i = 0; i < dialogs.length; i++) {
+  dialogs[i].addEventListener("close", updateDialogScrollLock);
+}
+
+function openDialog(dialog) {
+  dialog.showModal();
+  updateDialogScrollLock();
 }
 
 function showCart() {
@@ -378,19 +398,19 @@ const shopButtons = document.querySelectorAll("[data-open-shop]");
 for (let i = 0; i < shopButtons.length; i++) {
   shopButtons[i].addEventListener("click", function () {
     showShop();
-    shop.showModal();
+    openDialog(shop);
   });
 }
 
 document.querySelector("[data-open-cart]").addEventListener("click", function () {
   showCart();
-  cartWindow.showModal();
+  openDialog(cartWindow);
 });
 
 document.querySelector("[data-browse-shop]").addEventListener("click", function () {
   cartWindow.close();
   showShop();
-  shop.showModal();
+  openDialog(shop);
 });
 
 function showPrints() {

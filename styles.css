@@ -36,6 +36,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+html.dialog-open {
+  overflow: hidden;
+}
+
 img {
   display: block;
   max-width: 100%;
@@ -892,13 +896,16 @@ h2 em {
   margin-top: 0;
 }
 
-.cart-flight-image {
+.cart-flight-ball {
   position: fixed;
   z-index: 10000;
+  width: 28px;
+  height: 28px;
   pointer-events: none;
-  border-radius: 12px;
-  object-fit: cover;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #b8f5ff 0 8%, #28bce8 32%, #0879bd 72%, #064b83 100%);
+  box-shadow: 0 5px 16px rgba(0, 160, 214, 0.45);
 }
 
 .shop-dialog,
@@ -912,6 +919,9 @@ h2 em {
   background: #0b2031;
   color: var(--ink);
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .cart-dialog {
@@ -921,7 +931,6 @@ h2 em {
 .shop-dialog::backdrop,
 .cart-dialog::backdrop {
   background: rgba(2, 10, 17, 0.78);
-  backdrop-filter: blur(5px);
 }
 
 .dialog-heading {
@@ -1091,11 +1100,13 @@ h2 em {
   background: #0b2031;
   color: var(--ink);
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .detail-dialog::backdrop {
   background: rgba(2, 10, 17, 0.78);
-  backdrop-filter: blur(5px);
 }
 
 .detail-layout {
