@@ -11,6 +11,7 @@ const cartTotal = document.querySelector("#cart-total");
 const filterButtons = document.querySelectorAll(".filter-button");
 const previousGalleryButton = document.querySelector("#gallery-previous");
 const nextGalleryButton = document.querySelector("#gallery-next");
+const dialogs = [shop, cartWindow, detailWindow];
 
 const printPrices = {
   "Hex-Keychain.jpeg": 2.99, "octo-fidget.jpeg": 3.99,
@@ -194,6 +195,7 @@ function makePrintCard(print, inShop) {
     button.addEventListener("click", function () {
       addToCart(print);
     });
+    card.appendChild(button);
   } else {
     button.className = "view-item-button";
     button.textContent = "View item";
@@ -201,9 +203,22 @@ function makePrintCard(print, inShop) {
     button.addEventListener("click", function () {
       showDetails(print);
     });
+
+    const addButton = document.createElement("button");
+    addButton.className = "add-to-cart";
+    addButton.type = "button";
+    addButton.textContent = "Add to cart";
+    addButton.addEventListener("click", function (event) {
+      addToCart(print, event);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "idea-card-actions";
+    actions.appendChild(button);
+    actions.appendChild(addButton);
+    card.appendChild(actions);
   }
 
-  card.appendChild(button);
   return card;
 }
 
@@ -221,7 +236,7 @@ function showDetails(print) {
     detailWindow.close();
   };
 
-  detailWindow.showModal();
+  openDialog(detailWindow);
 }
 
 function showShop() {
@@ -236,9 +251,70 @@ function showShop() {
   }
 }
 
-function addToCart(print) {
+function addToCart(print, clickEvent) {
+  if (clickEvent && (!window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    animateCartAdd(clickEvent);
+  }
   cart.push(print);
   showCart();
+}
+
+function animateCartAdd(clickEvent) {
+  const cartButton = document.querySelector("[data-open-cart]");
+  const sourceRect = clickEvent.currentTarget.getBoundingClientRect();
+  const targetRect = cartButton.getBoundingClientRect();
+
+  if (sourceRect.width === 0 || targetRect.width === 0) {
+    return;
+  }
+
+  const startX = clickEvent.detail > 0 ? clickEvent.clientX : sourceRect.left + sourceRect.width / 2;
+  const startY = clickEvent.detail > 0 ? clickEvent.clientY : sourceRect.top + sourceRect.height / 2;
+  const ball = document.createElement("span");
+  ball.className = "cart-flight-ball";
+  ball.setAttribute("aria-hidden", "true");
+  ball.style.left = startX - 14 + "px";
+  ball.style.top = startY - 14 + "px";
+  if (typeof ball.animate !== "function") {
+    return;
+  }
+  document.body.appendChild(ball);
+
+  const offsetX = targetRect.left + targetRect.width / 2 - startX;
+  const offsetY = targetRect.top + targetRect.height / 2 - startY;
+  const animation = ball.animate([
+    { transform: "translate(0, 0) scale(1)", opacity: 1 },
+    {
+      transform: "translate(" + offsetX * 0.55 + "px, " + (offsetY * 0.55 - 48) + "px) scale(0.8)",
+      opacity: 1,
+      offset: 0.55
+    },
+    { transform: "translate(" + offsetX + "px, " + offsetY + "px) scale(0.12)", opacity: 0 }
+  ], {
+    duration: 750,
+    easing: "cubic-bezier(0.22, 1, 0.36, 1)"
+  });
+
+  animation.finished.then(function () {
+    ball.remove();
+  }, function () {
+    ball.remove();
+  });
+}
+
+function updateDialogScrollLock() {
+  document.documentElement.classList.toggle("dialog-open", dialogs.some(function (dialog) {
+    return dialog.open;
+  }));
+}
+
+for (let i = 0; i < dialogs.length; i++) {
+  dialogs[i].addEventListener("close", updateDialogScrollLock);
+}
+
+function openDialog(dialog) {
+  dialog.showModal();
+  updateDialogScrollLock();
 }
 
 function showCart() {
@@ -259,19 +335,35 @@ function showCart() {
     return;
   }
 
+  const cartGroups = new Map();
   for (let i = 0; i < cart.length; i++) {
+    const print = cart[i];
+    const group = cartGroups.get(print);
+    if (group) {
+      group.quantity++;
+    } else {
+      cartGroups.set(print, { print: print, quantity: 1 });
+    }
+  }
+
+  for (const [print, group] of cartGroups) {
     const item = document.createElement("article");
     item.className = "cart-item";
     const thumbnail = document.createElement("img");
     thumbnail.className = "cart-item-thumbnail";
-    thumbnail.src = cart[i].url;
+    thumbnail.src = print.url;
     thumbnail.alt = "";
     item.appendChild(thumbnail);
 
     const info = document.createElement("div");
     info.className = "cart-item-info";
-    addText(info, "h3", "", cart[i].title);
-    addText(info, "p", "cart-item-price", formatPrice(cart[i].price));
+    const heading = document.createElement("div");
+    heading.className = "cart-item-heading";
+    addText(heading, "h3", "", print.title);
+    const quantity = addText(heading, "span", "cart-item-quantity", "× " + group.quantity);
+    quantity.setAttribute("aria-label", "Quantity: " + group.quantity);
+    info.appendChild(heading);
+    addText(info, "p", "cart-item-price", formatPrice(print.price));
     item.appendChild(info);
 
     const removeButton = document.createElement("button");
@@ -279,7 +371,7 @@ function showCart() {
     removeButton.type = "button";
     removeButton.textContent = "Remove";
     removeButton.addEventListener("click", function () {
-      cart.splice(i, 1);
+      cart.splice(cart.indexOf(print), 1);
       showCart();
     });
 
@@ -306,19 +398,19 @@ const shopButtons = document.querySelectorAll("[data-open-shop]");
 for (let i = 0; i < shopButtons.length; i++) {
   shopButtons[i].addEventListener("click", function () {
     showShop();
-    shop.showModal();
+    openDialog(shop);
   });
 }
 
 document.querySelector("[data-open-cart]").addEventListener("click", function () {
   showCart();
-  cartWindow.showModal();
+  openDialog(cartWindow);
 });
 
 document.querySelector("[data-browse-shop]").addEventListener("click", function () {
   cartWindow.close();
   showShop();
-  shop.showModal();
+  openDialog(shop);
 });
 
 function showPrints() {
