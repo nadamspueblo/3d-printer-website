@@ -194,6 +194,7 @@ function makePrintCard(print, inShop) {
     button.addEventListener("click", function () {
       addToCart(print);
     });
+    card.appendChild(button);
   } else {
     button.className = "view-item-button";
     button.textContent = "View item";
@@ -201,9 +202,22 @@ function makePrintCard(print, inShop) {
     button.addEventListener("click", function () {
       showDetails(print);
     });
+
+    const addButton = document.createElement("button");
+    addButton.className = "add-to-cart";
+    addButton.type = "button";
+    addButton.textContent = "Add to cart";
+    addButton.addEventListener("click", function () {
+      addToCart(print, image);
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "idea-card-actions";
+    actions.appendChild(button);
+    actions.appendChild(addButton);
+    card.appendChild(actions);
   }
 
-  card.appendChild(button);
   return card;
 }
 
@@ -236,9 +250,51 @@ function showShop() {
   }
 }
 
-function addToCart(print) {
+function addToCart(print, sourceImage) {
+  if (sourceImage && (!window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+    animateCartAdd(sourceImage);
+  }
   cart.push(print);
   showCart();
+}
+
+function animateCartAdd(sourceImage) {
+  const cartButton = document.querySelector("[data-open-cart]");
+  const sourceRect = sourceImage.getBoundingClientRect();
+  const targetRect = cartButton.getBoundingClientRect();
+
+  if (sourceRect.width === 0 || targetRect.width === 0) {
+    return;
+  }
+
+  const flyer = sourceImage.cloneNode();
+  flyer.className = "cart-flight-image";
+  flyer.alt = "";
+  flyer.setAttribute("aria-hidden", "true");
+  flyer.style.left = sourceRect.left + "px";
+  flyer.style.top = sourceRect.top + "px";
+  flyer.style.width = sourceRect.width + "px";
+  flyer.style.height = sourceRect.height + "px";
+  if (typeof flyer.animate !== "function") {
+    return;
+  }
+  document.body.appendChild(flyer);
+
+  const offsetX = targetRect.left + targetRect.width / 2 - (sourceRect.left + sourceRect.width / 2);
+  const offsetY = targetRect.top + targetRect.height / 2 - (sourceRect.top + sourceRect.height / 2);
+  const animation = flyer.animate([
+    { transform: "translate(0, 0) scale(1)", opacity: 1 },
+    { transform: "translate(" + offsetX + "px, " + offsetY + "px) scale(0.15)", opacity: 0 }
+  ], {
+    duration: 650,
+    easing: "cubic-bezier(0.2, 0.8, 0.2, 1)"
+  });
+
+  animation.finished.then(function () {
+    flyer.remove();
+  }, function () {
+    flyer.remove();
+  });
 }
 
 function showCart() {
@@ -259,19 +315,35 @@ function showCart() {
     return;
   }
 
+  const cartGroups = new Map();
   for (let i = 0; i < cart.length; i++) {
+    const print = cart[i];
+    const group = cartGroups.get(print);
+    if (group) {
+      group.quantity++;
+    } else {
+      cartGroups.set(print, { print: print, quantity: 1 });
+    }
+  }
+
+  for (const [print, group] of cartGroups) {
     const item = document.createElement("article");
     item.className = "cart-item";
     const thumbnail = document.createElement("img");
     thumbnail.className = "cart-item-thumbnail";
-    thumbnail.src = cart[i].url;
+    thumbnail.src = print.url;
     thumbnail.alt = "";
     item.appendChild(thumbnail);
 
     const info = document.createElement("div");
     info.className = "cart-item-info";
-    addText(info, "h3", "", cart[i].title);
-    addText(info, "p", "cart-item-price", formatPrice(cart[i].price));
+    const heading = document.createElement("div");
+    heading.className = "cart-item-heading";
+    addText(heading, "h3", "", print.title);
+    const quantity = addText(heading, "span", "cart-item-quantity", "× " + group.quantity);
+    quantity.setAttribute("aria-label", "Quantity: " + group.quantity);
+    info.appendChild(heading);
+    addText(info, "p", "cart-item-price", formatPrice(print.price));
     item.appendChild(info);
 
     const removeButton = document.createElement("button");
@@ -279,7 +351,7 @@ function showCart() {
     removeButton.type = "button";
     removeButton.textContent = "Remove";
     removeButton.addEventListener("click", function () {
-      cart.splice(i, 1);
+      cart.splice(cart.indexOf(print), 1);
       showCart();
     });
 
