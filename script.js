@@ -17,11 +17,17 @@ const printPrices = {
   "gear-fidget-spinner.jpeg": 4.99, "rocktopus.jpeg": 5.99
 };
 const printDescriptions = {
-  "Hex-keychain.jpeg": "A lightweight keychain with a hex fidget design.",
+  "Hex-Keychain.jpeg": "A lightweight keychain with a hex fidget design.",
   "octo-fidget.jpeg": "A desk fidget toy with an octopus design.",
   "gear-fidget-spinner.jpeg": "A planetary gear-based fidget spinner.",
   "rocktopus.jpeg": "A rocktopus figurine."
 };
+const printFiles = [
+  "Hex-Keychain.jpeg",
+  "gear-fidget-spinner.jpeg",
+  "octo-fidget.jpeg",
+  "rocktopus.jpeg"
+];
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD"
@@ -30,7 +36,6 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 let prints = [];
 let cart = [];
 let selectedFilter = "all";
-let printStatus = "loading";
 
 function updateGalleryControls() {
   const maxScroll = gallery.scrollWidth - gallery.clientWidth;
@@ -221,13 +226,7 @@ function showDetails(print) {
 
 function showShop() {
   if (prints.length === 0) {
-    if (printStatus === "loading") {
-      showMessage(shopProducts, "Loading student prints…");
-    } else if (printStatus === "error") {
-      showMessage(shopProducts, "The shop preview isn’t available right now. Please try again later.");
-    } else {
-      showMessage(shopProducts, "No prints are available to preview yet.");
-    }
+    showMessage(shopProducts, "No prints are available to preview yet.");
     return;
   }
 
@@ -354,49 +353,16 @@ for (let i = 0; i < filterButtons.length; i++) {
   });
 }
 
-async function loadPrints() {
-  const folderUrl = new URL("prints/", window.location.href);
-  const response = await fetch(folderUrl);
-
-  if (!response.ok) {
-    throw new Error("Could not read the prints folder.");
-  }
-
-  const page = new DOMParser().parseFromString(await response.text(), "text/html");
-  const links = page.querySelectorAll("a[href]");
-  const imageUrls = [];
-
-  for (let i = 0; i < links.length; i++) {
-    const url = new URL(links[i].getAttribute("href"), folderUrl);
-    const fileName = url.pathname.slice(folderUrl.pathname.length);
-    const isInFolder =
-      url.origin === folderUrl.origin &&
-      url.pathname.startsWith(folderUrl.pathname) &&
-      fileName.length > 0 &&
-      !fileName.includes("/");
-    const isImage = /\.(avif|gif|jpe?g|png|webp)$/i.test(fileName);
-
-    if (isInFolder && isImage) {
-      imageUrls.push(url);
-    }
-  }
-
-  imageUrls.sort(function (first, second) {
-    return first.pathname.localeCompare(second.pathname);
-  });
-
-  for (let i = 0; i < imageUrls.length; i++) {
-    const fileName = decodeURIComponent(
-      imageUrls[i].pathname.slice(folderUrl.pathname.length)
-    );
-
+function loadPrints() {
+  for (let i = 0; i < printFiles.length; i++) {
+    const fileName = printFiles[i];
     let title = getTitle(fileName);
     if (title === "") {
       title = "Student print";
     }
 
     prints.push({
-      url: imageUrls[i].href,
+      url: new URL("prints/" + encodeURIComponent(fileName), document.baseURI).href,
       title: title,
       category: getCategory(fileName),
       price: getPrintPrice(fileName),
@@ -405,19 +371,8 @@ async function loadPrints() {
     });
   }
 
-  if (prints.length === 0) {
-    printStatus = "empty";
-  } else {
-    printStatus = "loaded";
-  }
   showShop();
   showPrints();
 }
 
-loadPrints().catch(function (error) {
-  console.error("Could not load student prints.", error);
-  printStatus = "error";
-  showMessage(gallery, "Couldn’t load the prints. Start Live Server and try again.");
-  updateGalleryControls();
-  showShop();
-});
+loadPrints();
